@@ -161,19 +161,32 @@ keypatch plugin you need to install
 More on this. If you have macOS arm64 you might have a problem:
 
 ```txt
-fail to load the dynamic library. 
+fail to load the dynamic library.
 ```
 
-As of today (16.10.204) if you `homebrew install keystone`; installs
+For Python >= 3.12, you have to install `setuptools` to see above errors as `keystone-engine` depends on `disutils`
+which is removed from Python >= 3.12.
+
+```
+python3 -m pip install setuptools
+```
+
+As of today (2025/06/17) if you `homebrew install keystone`; installs
 related keystone binaries (like `kstone`) but not `libkeystone.dylib`.
 You have to compile keystone from its source and put it under your library
 path.
 
 ```txt
-git clone https://github.com/keystone-engine/keystone.git
+git clone --depth=1 https://github.com/keystone-engine/keystone.git
 cd keystone
 mkdir build
 cd build
+```
+
+Or you could use my forked version for macOS with ARM chips.
+```
+git clone --depth=1 https://github.com/tizee/keystone.git
+cd keystone
 ```
 
 Before building make those changes:
@@ -188,6 +201,11 @@ after
 ARCH='x86_64'
 ```
 
+For ARM chips, e.g. M-series macbook, please use:
+```
+ARCH='ARM'
+```
+
 `make-share.sh`: I only add my python path to this file. If you use your
 stock python you do not need to change someting:
 
@@ -197,6 +215,23 @@ cmake -DBUILD_LIBS_ONLY=$BUILD_LIBS_ONLY -DLLVM_BUILD_32_BITS="$LLVM_BUILD_32_BI
 
 after
 cmake -DBUILD_LIBS_ONLY=$BUILD_LIBS_ONLY -DLLVM_BUILD_32_BITS="$LLVM_BUILD_32_BITS" -DCMAKE_OSX_ARCHITECTURES="$ARCH" -DCMAKE_BUILD_TYPE=$BUILDTYPE -DBUILD_SHARED_LIBS=ON -DLLVM_TARGETS_TO_BUILD="all" -DPYTHON_LIBRARY="/opt/homebrew/opt/python@3.12/Frameworks/Python.framework/Versions/3.12/lib/libpython3.12.dylib" -DPYTHON_EXECUTABLE="/opt/homebrew/opt/python@3.12/Frameworks/Python.framework/Versions/3.12/bin/python3.12" -G "Unix Makefiles" ..
+```
+
+Please update cmake version requirements in all `CMakeLists.txt` from 2.8 to 3.5:
+```
+cmake_minimum_required(VERSION 3.5)
+```
+
+Remove or comment out `POLICY CMP0051` in `CMakeLists.txt`:
+```
+if (POLICY CMP0051)
+  # CMake 3.1 and higher include generator expressions of the form
+  # $<TARGETLIB:obj> in the SOURCES property.  These need to be
+  # stripped everywhere that access the SOURCES property, so we just
+  # defer to the OLD behavior of not including generator expressions
+  # in the output for now.
+  cmake_policy(SET CMP0051 OLD)
+endif()
 ```
 
 After related/needed changes now we can build keystone:
@@ -217,6 +252,14 @@ Make a symbolic link
 ```txt
 cd /opt/homebrew/lib
 ln -s ../Cellar/keystone/0.9.2/lib/libkeystone.0.dylib libkeystone.dylib
+```
+
+Copy `libkeystone.0.dylib` and `libkeystone.dylib` to python's `keystone-engine` package.
+
+```
+# cd to build
+cp llvm/lib/libkeystone.dylib /opt/homebrew/lib/python3.13/site-packages/keystone
+cp llvm/lib/libkeystone.0.dylib /opt/homebrew/lib/python3.13/site-packages/keystone
 ```
 
 ## [patching][06]
